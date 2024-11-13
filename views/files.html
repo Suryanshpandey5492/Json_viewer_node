@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+  <title>File Manager</title>
+</head>
+<body>
+  <h2>File Manager</h2>
+  <button onclick="logout()">Logout</button>
+
+  <h3>Upload JSON File</h3>
+  <form id="upload-form">
+    <input type="file" id="file-input" accept=".json" required />
+    <button type="submit">Upload</button>
+  </form>
+
+  <h3>Your Files</h3>
+  <ul id="file-list"></ul>
+  <div id="file-content"></div> <!-- Container to display file content -->
+
+  <div id="error-message" style="color: red; display: none;"></div> <!-- Error message container -->
+
+  <script>
+    // Function to fetch files from the backend and display them
+    async function loadFiles() {
+    const errorMessageDiv = document.getElementById("error-message");
+    errorMessageDiv.style.display = "none";  // Hide error message initially
+
+    try {
+        const response = await fetch(`/api/files`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            console.error("Error response from server:", data.error);  // Log error message from server
+            errorMessageDiv.textContent = `Error: ${data.error || 'Failed to load files.'}`;
+            errorMessageDiv.style.display = "block";
+            return;
+        }
+
+        const data = await response.json();
+        console.log("Files data fetched from server:", data);  // Log the data to inspect it
+
+        const fileList = document.getElementById("file-list");
+        fileList.innerHTML = ""; // Clear the list before re-rendering
+
+        if (data.files && data.files.length > 0) {
+            data.files.forEach((file, index) => {
+                const li = document.createElement("li");
+                li.textContent = `File ${index + 1}`;
+                li.onclick = () => viewFileContent(file.content);
+                fileList.appendChild(li);
+            });
+        } else {
+            fileList.innerHTML = "<li>No files found.</li>";
+        }
+    } catch (error) {
+        console.error("Error during fetch operation:", error.message, error.stack);  // Log both the message and stack trace
+        errorMessageDiv.textContent = `Failed to load files. ${error.message}`;
+        errorMessageDiv.style.display = "block";  // Display the error message
+    }
+}
+
+function viewFileContent(content) {
+    const fileContentDiv = document.getElementById("file-content");
+    try {
+        console.log("Displaying file content:", content);  // Log the content to be displayed
+        const jsonString = JSON.stringify(content, null, 2);  // Format JSON for readability
+        fileContentDiv.innerHTML = `<pre>${jsonString}</pre>`;
+    } catch (error) {
+        console.error("Error displaying file content:", error.message, error.stack);  // Log error details
+        fileContentDiv.innerHTML = "<p>Unable to display content.</p>";
+    }
+}
+    // File upload handler
+    document.getElementById("upload-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const fileInput = document.getElementById("file-input");
+  const file = fileInput.files[0];
+
+  if (!file) {
+    alert("Please select a JSON file to upload.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const jsonContent = JSON.parse(event.target.result);
+      console.log("File content to upload:", jsonContent);  // Log the JSON content to be uploaded
+
+      const response = await fetch("/api/files/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ content: jsonContent }),
+      });
+
+      const errorMessageDiv = document.getElementById("error-message");
+      if (response.ok) {
+        alert("File uploaded successfully!");
+        loadFiles();  // Reload the file list after successful upload
+      } else {
+        const data = await response.json();
+        errorMessageDiv.textContent = `Error: ${data.error || 'Failed to upload file.'}`;
+        errorMessageDiv.style.display = "block"; // Show the error message
+      }
+    } catch (err) {
+      alert("Invalid JSON format.");
+    }
+  };
+
+  reader.readAsText(file);
+};
+
+
+    // Logout function to clear the token and redirect to the login page
+    function logout() {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+
+    // Load previously stored files if any
+    loadFiles();
+  </script>
+</body>
+</html>
+
